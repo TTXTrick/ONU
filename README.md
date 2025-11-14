@@ -7,7 +7,6 @@ custom boot theme, and a fully automated build system.
 - Live environment with ONU branding
 - Calamares graphical installer
 - ONU Desktop metapackage
-- Local APT repository
 - Custom bootloader theme
 - Automatic ISO build script
 
