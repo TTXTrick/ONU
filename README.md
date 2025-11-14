@@ -1,22 +1,25 @@
-# ONU Linux (Oxygen is Not Unix)
+# ONU Linux — Oxygen is Not Unix
+Lightweight, fast Debian-based distribution featuring XFCE, Calamares installer,
+custom boot theme, and a fully automated build system.
 
-ONU Linux is a lightweight Debian-based XFCE distribution built using a fully
-automated build script.
+## 🛠 Features
+- Custom XFCE theme
+- Live environment with ONU branding
+- Calamares graphical installer
+- ONU Desktop metapackage
+- Local APT repository
+- Custom bootloader theme
+- Automatic ISO build script
 
-## Build the OS
-Run this in a Debian-based environment.
-
-git clone https://github.com/TTXTrick/ONU
-
-cd ONU
-
-chmod +x build.sh
-
-./build.sh
-
-
-## Requirements
-
-- Debian or Ubuntu host
-- 8GB disk space
+## 📦 Build Requirements
+- Debian or Ubuntu build host
+- 6–8GB disk space
 - 4GB RAM recommended
+
+## 🚀 How to Build ONU Linux
+
+```bash
+git clone https://github.com/YOURNAME/onu-linux.git
+cd onu-linux
+chmod +x build.sh
+./build.sh
