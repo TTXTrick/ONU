@@ -7,6 +7,9 @@ automated build script.
 Run this in a Debian-based environment.
 
 git clone https://github.com/TTXTrick/ONU
+
 cd ONU
+
 chmod +x build.sh
+
 ./build.sh
