@@ -23,6 +23,7 @@ git clone https://github.com/TTXTrick/ONU.git
 cd ONU
 chmod +x build.sh
 ./build.sh
+```
 
 ## After the build
 When the build finishes, you will have ONU-1.0.iso.
