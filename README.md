@@ -19,7 +19,7 @@ custom boot theme, and a fully automated build system.
 ## 🚀 How to Build ONU Linux
 
 ```bash
-git clone https://github.com/YOURNAME/onu-linux.git
-cd onu-linux
+git clone https://github.com/TTXTrick/ONU.git
+cd ONU
 chmod +x build.sh
 ./build.sh
