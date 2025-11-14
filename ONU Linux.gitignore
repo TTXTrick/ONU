@@ -1,0 +1,49 @@
+# ================================
+# ONU Linux Gitignore
+# (live-build, reprepro, deb packages)
+# ================================
+
+# --- Live-Build Generated ---
+chroot/
+binary/
+auto/
+config/auto/
+cache/
+tmp/
+local/
+var/
+
+# --- ISO Output ---
+*.iso
+*.hybrid.iso
+
+# --- Debian Packages ---
+*.deb
+*.dsc
+*.changes
+*.buildinfo
+
+# --- Repo Pool (generated automatically) ---
+repo/db/
+repo/pool/
+repo/conf/distributions~
+repo/conf/options~
+
+# --- Logs ---
+*.log
+
+# --- Editor / IDE ---
+*.swp
+*.swo
+*.bak
+*~
+.vscode/
+.idea/
+
+# --- System Crap ---
+.DS_Store
+Thumbs.db
+
+# --- Python Virtualenvs (if used for tooling) ---
+venv/
+.env/
