@@ -13,3 +13,10 @@ cd ONU
 chmod +x build.sh
 
 ./build.sh
+
+
+## Requirements
+
+- Debian or Ubuntu host
+- 8GB disk space
+- 4GB RAM recommended
