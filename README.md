@@ -24,6 +24,5 @@ cd ONU
 chmod +x build.sh
 ./build.sh
 
-After the build, you will have:
-```bash
-ONU-1.0.iso
+## After the build
+When the build finishes, you will have ONU-1.0.iso.
