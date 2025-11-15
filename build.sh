@@ -33,6 +33,7 @@ spinner() {
     local spin='-\|/'
 
     printf "⏳ Working... "
+    local i=0
     while kill -0 "$pid" 2>/dev/null; do
         printf "\b${spin:i++%${#spin}:1}"
         sleep $delay
@@ -152,26 +153,19 @@ step "Building local APT repository"
 
 mkdir -p repo/conf repo/db repo/dists repo/pool
 
+# Fixed distributions file — no signing
 cat <<EOF > repo/conf/distributions
-Codename: $DISTRO
-Components: main
+Origin: ONU
+Label: ONU
+Suite: bookworm
+Codename: bookworm
 Architectures: amd64
-SignWith: yes
+Components: main
+Description: ONU Local Repo
 EOF
 
-# GPG key creation if missing
-if ! gpg --list-keys "$NAME" >/dev/null 2>&1; then
-    echo "🔑 Generating GPG key..."
-    gpg --batch --passphrase '' --quick-gen-key "$NAME <$EMAIL>" default default never \
-        || fail "GPG key creation failed"
-fi
-
 # Insert the package
-if ! reprepro -b repo includedeb $DISTRO packages/$PKG_NAME.deb; then
-    echo "⚠️ Signing failed — retrying unsigned"
-    sed -i 's/SignWith: yes/SignWith: no/' repo/conf/distributions
-    reprepro -b repo includedeb $DISTRO packages/$PKG_NAME.deb || fail "reprepro failed"
-fi
+reprepro -b repo includedeb $DISTRO packages/$PKG_NAME.deb || fail "reprepro failed"
 
 # Add repo entry
 echo "deb [trusted=yes] file:$ROOT_DIR/repo $DISTRO main" \
@@ -308,7 +302,7 @@ step "Configuring EFI GRUB theme"
 
 EFI_DIR="config/includes.binary/boot/grub"
 
-curl -Lf "https://upload.wikimedia.org/wikipedia/commons/3/3f/Light_blue_gradient_background.png" \
+curl -Lf "$WALLPAPER_URL" \
      -o "$EFI_DIR/onu_splash.png"
 
 cat <<EOF > "$EFI_DIR/grub.cfg"
