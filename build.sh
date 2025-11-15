@@ -57,9 +57,6 @@ EMAIL="builder@onu.local"
 NAME="ONU Builder"
 
 ROOT_DIR="$(pwd)"
-
-# Where we will create an *in-tree* repository that will be included into the chroot
-# so apt inside the chroot can read the repo with a file: URL that exists inside the chroot.
 IN_TREE_REPO="config/includes.chroot/opt/onu-repo"
 
 ############################################################
@@ -81,7 +78,7 @@ step "Installing dependencies"
 
 sudo apt update || fail "apt update failed"
 sudo apt install -y live-build debootstrap xorriso syslinux genisoimage squashfs-tools \
-    reprepro dpkg-dev apt-utils curl git xfconf qttools5-dev-tools cmake apt-ftparchive || fail "Dependency install failed"
+    reprepro dpkg-dev apt-utils curl git xfconf qttools5-dev-tools cmake || fail "Dependency install failed"
 
 success "Dependencies installed"
 
@@ -90,9 +87,7 @@ success "Dependencies installed"
 ############################################################
 step "Cleaning previous builds"
 
-# remove previous outputs but keep the script/config templates (we will recreate)
 sudo rm -rf chroot binary auto tmp build.pid || fail "Cleanup failed"
-# do not remove 'config' entirely here if you want to preserve custom edits — we recreate needed subdirs below
 mkdir -p config
 
 success "Clean environment ready"
@@ -111,11 +106,10 @@ mkdir -p \
     config/includes.binary/isolinux \
     config/includes.binary/boot/grub \
     config/includes.binary/boot/grub/themes \
-    branding/calamares \
-    repo
+    branding/calamares
 
-# ensure the in-tree repo directories exist (we will generate repo metadata here)
-mkdir -p "$IN_TREE_REPO/pool/main" "$IN_TREE_REPO/dists/$DISTRO/main/binary-amd64"
+mkdir -p "$IN_TREE_REPO/dists/$DISTRO/main/binary-amd64"
+mkdir -p "$IN_TREE_REPO/pool/main"
 
 success "Directory structure created"
 
@@ -124,12 +118,12 @@ success "Directory structure created"
 ############################################################
 step "Downloading wallpaper"
 
-# Save to both chroot includes and binary grub area (so UEFI sees it)
 curl -Lf "$WALLPAPER_URL" \
   -o config/includes.chroot/usr/share/backgrounds/ONU/wallpaper.png \
   || fail "Wallpaper download failed"
-# copy a copy for GRUB splash (UEFI)
-cp config/includes.chroot/usr/share/backgrounds/ONU/wallpaper.png config/includes.binary/boot/grub/onu_splash.png || true
+
+cp config/includes.chroot/usr/share/backgrounds/ONU/wallpaper.png \
+   config/includes.binary/boot/grub/onu_splash.png || true
 
 success "Wallpaper downloaded"
 
@@ -151,76 +145,58 @@ Priority: optional
 Depends: xfce4, firefox-esr, thunar, mousepad, vlc, lightdm, network-manager
 Section: metapackages
 Description: ONU Linux Desktop Meta-package
- Installs the ONU Linux core desktop environment.
+ Installs the core ONU Linux desktop environment.
 EOF
 
 echo "ONU Linux Meta-package" > "$PACKAGE_DIR/usr/share/doc/$PKG_NAME/README"
 
-# Build deb (will create packages/onu-desktop.deb)
 dpkg-deb --build --root-owner-group "$PACKAGE_DIR" || fail "dpkg-deb failed"
-
-# Ensure the .deb exists
-if [ ! -f "packages/$PKG_NAME.deb" ]; then
-    fail "Expected packages/$PKG_NAME.deb missing"
-fi
 
 success "Meta-package built"
 
 ############################################################
-# LOCAL APT REPOSITORY (IN-TREE / will be included in chroot)
+# LOCAL APT REPOSITORY  (INSIDE CHROOT)
 ############################################################
-step "Building local APT repository (inside tree so chroot can access it)"
+step "Building internal APT repository"
 
-REPO_ROOT="$ROOT_DIR/$IN_TREE_REPO"
-DISTRO_DIR="$REPO_ROOT/dists/$DISTRO/main/binary-amd64"
-POOL_DIR="$REPO_ROOT/pool/main"
+REPO="$ROOT_DIR/$IN_TREE_REPO"
 
-# Clean and re-create the in-tree repo
-rm -rf "$REPO_ROOT"
-mkdir -p "$DISTRO_DIR" "$POOL_DIR"
+rm -rf "$REPO"
+mkdir -p "$REPO/dists/$DISTRO/main/binary-amd64"
+mkdir -p "$REPO/pool/main"
 
-# Copy our generated package into the repo pool
-cp "packages/$PKG_NAME.deb" "$POOL_DIR/" || fail "Failed to copy package to pool"
+cp "packages/$PKG_NAME.deb" "$REPO/pool/main/" || fail "Cannot copy meta-package"
 
-# Move into the repo root (dpkg-scanpackages expects to be run with paths relative)
-pushd "$REPO_ROOT" >/dev/null
+pushd "$REPO" >/dev/null
 
-# Generate Packages (uncompressed) and compressed Packages.gz
-# dpkg-scanpackages scans the pool directory and writes Packages file for apt
-dpkg-scanpackages pool /dev/null > "dists/$DISTRO/main/binary-amd64/Packages" || { popd >/dev/null; fail "dpkg-scanpackages failed"; }
-gzip -9c "dists/$DISTRO/main/binary-amd64/Packages" > "dists/$DISTRO/main/binary-amd64/Packages.gz" || { popd >/dev/null; fail "gzip Packages failed"; }
+dpkg-scanpackages pool > dists/$DISTRO/main/binary-amd64/Packages || fail "dpkg-scanpackages failed"
+gzip -9c dists/$DISTRO/main/binary-amd64/Packages > dists/$DISTRO/main/binary-amd64/Packages.gz
 
-# Create a minimal Release file so apt is happier. Prefer apt-ftparchive if installed.
-if command -v apt-ftparchive >/dev/null 2>&1; then
-    apt-ftparchive release dists/"$DISTRO" > dists/"$DISTRO"/Release 2>/dev/null || true
+# Try to generate a Release file (optional, improves apt output)
+if command -v apt-ftparchive >/dev/null; then
+    apt-ftparchive release dists/"$DISTRO" > dists/"$DISTRO"/Release
 else
-    # Minimal Release fallback
     cat > dists/"$DISTRO"/Release <<EOREL
 Origin: ONU
-Label: ONU repo
+Label: ONU-Repo
 Suite: $DISTRO
 Codename: $DISTRO
-Date: $(date -Ru)
 Architectures: amd64
 Components: main
-Description: ONU in-tree repository
 EOREL
 fi
 
 popd >/dev/null
 
-# Add repo entry for the live system, BUT point at the repo inside the chroot (in-tree path).
-# When the ISO/chroot is built the path /opt/onu-repo will exist as we've included it under
-# config/includes.chroot/opt/onu-repo
 echo "deb [trusted=yes] file:/opt/onu-repo $DISTRO main" \
-  | tee config/includes.chroot/etc/apt/sources.list.d/onu-local.list >/dev/null
+    > config/includes.chroot/etc/apt/sources.list.d/onu-local.list
 
-success "Local APT repo ready (created under $IN_TREE_REPO and referenced inside chroot)"
+success "Local APT repo ready"
 
 ############################################################
-# CALAMARES INSTALLER — FULL CONFIG
+# CALAMARES INSTALLER (3.3+)
 ############################################################
-step "Configuring full Calamares installer (Calamares 3.3+ style)"
+step "Configuring Calamares installer"
 
 CAL_DIR="config/includes.chroot/etc/calamares"
 mkdir -p "$CAL_DIR/modules"
@@ -228,19 +204,6 @@ mkdir -p "$CAL_DIR/modules"
 cat <<'EOF' > "$CAL_DIR/settings.conf"
 ---
 modules-search: [ local ]
-instances:
-  - show:
-      sidebar: true
-      steps:
-        - welcome
-        - locale
-        - keyboard
-        - partition
-        - users
-        - packages
-        - displaymanager
-        - finished
-
 sequence:
   - welcome
   - locale
@@ -250,7 +213,11 @@ sequence:
   - packages
   - displaymanager
   - finished
+
+branding: "onu"
 EOF
+
+# Installer modules
 
 cat <<EOF > "$CAL_DIR/modules/users.conf"
 ---
@@ -275,24 +242,16 @@ EOF
 
 cat <<'EOF' > "$CAL_DIR/modules/partition.conf"
 ---
-dontInstallOnSsd: false
 defaultFilesystemType: "ext4"
-efiSystemPartition: "/boot/efi"
-userSwapChoices: [ none ]
 automatic:
   partitionLayout: "erase"
+efiSystemPartition: "/boot/efi"
 EOF
 
 cat <<'EOF' > "$CAL_DIR/modules/displaymanager.conf"
 ---
 displaymanagers:
   - lightdm
-EOF
-
-cat <<'EOF' > "$CAL_DIR/modules/finished.conf"
----
-restartNowEnabled: true
-runLiveCleanup: true
 EOF
 
 cat <<'EOF' > "$CAL_DIR/modules/packages.conf"
@@ -303,12 +262,18 @@ packages:
     - live-config
 EOF
 
-success "Calamares installer configured (full auto mode)"
+cat <<'EOF' > "$CAL_DIR/modules/finished.conf"
+---
+restartNowEnabled: true
+runLiveCleanup: true
+EOF
+
+success "Calamares configured"
 
 ############################################################
-# LIVE USER
+# LIVE USER HOOK
 ############################################################
-step "Creating live user hook (live-config)"
+step "Creating live user"
 
 cat <<EOF > config/includes.chroot/lib/live/config/0031-onu-user
 #!/bin/sh
@@ -319,12 +284,12 @@ adduser $LIVE_USER sudo || true
 EOF
 chmod +x config/includes.chroot/lib/live/config/0031-onu-user
 
-success "Live user hook created"
+success "Live user hook installed"
 
 ############################################################
-# BOOTLOADER — ISOLINUX (BIOS)
+# ISOLINUX (BIOS)
 ############################################################
-step "Creating BIOS (ISOLINUX) bootloader"
+step "Configuring ISOLINUX bootloader"
 
 cat <<'EOF' > config/includes.binary/isolinux/isolinux.cfg
 UI menu.c32
@@ -338,22 +303,14 @@ LABEL live
   APPEND initrd=/live/initrd.img boot=live quiet splash
 EOF
 
-success "ISOLINUX ready"
+success "ISOLINUX configured"
 
 ############################################################
-# BOOTLOADER — EFI GRUB THEME
+# GRUB (UEFI)
 ############################################################
-step "Configuring EFI GRUB theme"
+step "Configuring EFI GRUB"
 
-EFI_DIR="config/includes.binary/boot/grub"
-mkdir -p "$EFI_DIR"
-
-# we already copied the splash earlier; ensure the file exists
-if [ ! -f "$EFI_DIR/onu_splash.png" ]; then
-    cp config/includes.chroot/usr/share/backgrounds/ONU/wallpaper.png "$EFI_DIR/onu_splash.png" || true
-fi
-
-cat <<'EOF' > "$EFI_DIR/grub.cfg"
+cat <<'EOF' > config/includes.binary/boot/grub/grub.cfg
 set timeout=5
 set default=0
 
@@ -369,29 +326,25 @@ menuentry "Start ONU Linux Live (EFI)" {
 }
 EOF
 
-success "EFI GRUB theme installed"
+success "EFI GRUB configured"
 
 ############################################################
 # BUILD ISO
 ############################################################
-step "Configuring live-build"
+step "Running live-build config"
 
-# choose bootloaders; syslinux for BIOS and grub-efi for UEFI.
 sudo lb config \
    --mode debian \
    --distribution "$DISTRO" \
    --archive-areas "main contrib non-free-firmware" \
    --debian-installer live \
-   --bootloaders syslinux,grub-efi \
+   --bootloaders "syslinux,grub-efi" \
    || fail "lb config failed"
 
-step "Building ISO (this will take time)"
+step "Building the ISO (this will take time)"
 
-# Run lb build in background and save its PID so spinner can monitor it.
 ( sudo lb build & echo $! > build.pid )
-# read PID and start spinner
-PID="$(cat build.pid)"
-spinner "$PID"
+spinner "$(cat build.pid)"
 
 if [ ! -f live-image-amd64.hybrid.iso ]; then
     fail "ISO build failed"
