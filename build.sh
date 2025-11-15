@@ -97,6 +97,7 @@ step "Preparing directory structure"
 mkdir -p \
     packages/$PKG_NAME/DEBIAN \
     config/includes.chroot/etc/skel \
+    config/includes.chroot/etc/apt/sources.list.d \
     config/includes.chroot/usr/share/backgrounds/ONU \
     config/includes.chroot/lib/live/config \
     config/includes.binary/isolinux \
@@ -126,7 +127,6 @@ PACKAGE_DIR="packages/$PKG_NAME"
 rm -rf "$PACKAGE_DIR"
 mkdir -p "$PACKAGE_DIR/DEBIAN" "$PACKAGE_DIR/usr/share/doc/$PKG_NAME"
 
-# 🔧 FIX APPLIED HERE — Priority field added
 cat <<EOF > "$PACKAGE_DIR/DEBIAN/control"
 Package: $PKG_NAME
 Version: 1.0
@@ -166,7 +166,7 @@ if ! gpg --list-keys "$NAME" >/dev/null 2>&1; then
         || fail "GPG key creation failed"
 fi
 
-# Insert the package, fallback to unsigned
+# Insert the package
 if ! reprepro -b repo includedeb $DISTRO packages/$PKG_NAME.deb; then
     echo "⚠️ Signing failed — retrying unsigned"
     sed -i 's/SignWith: yes/SignWith: no/' repo/conf/distributions
