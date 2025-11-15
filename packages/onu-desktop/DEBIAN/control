@@ -1,0 +1,9 @@
+Package: onu-desktop
+Version: 1.0
+Architecture: all
+Maintainer: ONU Builder <builder@onu.local>
+Depends: xfce4, firefox-esr, thunar, mousepad, vlc, lightdm, network-manager
+Section: metapackages
+Priority: optional
+Description: ONU Linux Desktop Meta-package
+ Installs the ONU Linux core desktop environment.
