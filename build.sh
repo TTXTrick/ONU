@@ -126,11 +126,13 @@ PACKAGE_DIR="packages/$PKG_NAME"
 rm -rf "$PACKAGE_DIR"
 mkdir -p "$PACKAGE_DIR/DEBIAN" "$PACKAGE_DIR/usr/share/doc/$PKG_NAME"
 
+# 🔧 FIX APPLIED HERE — Priority field added
 cat <<EOF > "$PACKAGE_DIR/DEBIAN/control"
 Package: $PKG_NAME
 Version: 1.0
 Architecture: all
 Maintainer: $NAME <$EMAIL>
+Priority: optional
 Depends: xfce4, firefox-esr, thunar, mousepad, vlc, lightdm, network-manager
 Section: metapackages
 Description: ONU Linux Desktop Meta-package
@@ -157,19 +159,21 @@ Architectures: amd64
 SignWith: yes
 EOF
 
-# GPG key generation
+# GPG key creation if missing
 if ! gpg --list-keys "$NAME" >/dev/null 2>&1; then
     echo "🔑 Generating GPG key..."
     gpg --batch --passphrase '' --quick-gen-key "$NAME <$EMAIL>" default default never \
         || fail "GPG key creation failed"
 fi
 
+# Insert the package, fallback to unsigned
 if ! reprepro -b repo includedeb $DISTRO packages/$PKG_NAME.deb; then
     echo "⚠️ Signing failed — retrying unsigned"
     sed -i 's/SignWith: yes/SignWith: no/' repo/conf/distributions
     reprepro -b repo includedeb $DISTRO packages/$PKG_NAME.deb || fail "reprepro failed"
 fi
 
+# Add repo entry
 echo "deb [trusted=yes] file:$ROOT_DIR/repo $DISTRO main" \
   | tee config/includes.chroot/etc/apt/sources.list.d/onu-local.list >/dev/null
 
@@ -183,7 +187,6 @@ step "Configuring full Calamares installer"
 CAL_DIR="config/includes.chroot/etc/calamares"
 mkdir -p "$CAL_DIR/modules"
 
-# Main settings
 cat <<EOF > "$CAL_DIR/settings.conf"
 ---
 modules-search: [ local ]
@@ -211,7 +214,6 @@ sequence:
   - finished
 EOF
 
-# Users
 cat <<EOF > "$CAL_DIR/modules/users.conf"
 ---
 createUser:
@@ -221,7 +223,6 @@ createUser:
   password: "live"
 EOF
 
-# Locale
 cat <<EOF > "$CAL_DIR/modules/locale.conf"
 ---
 localeGen: [ "en_US.UTF-8 UTF-8" ]
@@ -229,13 +230,11 @@ defaultLocale: "en_US.UTF-8"
 timeZone: "UTC"
 EOF
 
-# Keyboard
 cat <<EOF > "$CAL_DIR/modules/keyboard.conf"
 ---
 defaultLayout: "us"
 EOF
 
-# Partitioning
 cat <<EOF > "$CAL_DIR/modules/partition.conf"
 ---
 dontInstallOnSsd: false
@@ -246,21 +245,18 @@ automatic:
   partitionLayout: "erase"
 EOF
 
-# Display manager
 cat <<EOF > "$CAL_DIR/modules/displaymanager.conf"
 ---
 displaymanagers:
   - lightdm
 EOF
 
-# Finished
 cat <<EOF > "$CAL_DIR/modules/finished.conf"
 ---
 restartNowEnabled: true
 runLiveCleanup: true
 EOF
 
-# Packages
 cat <<EOF > "$CAL_DIR/modules/packages.conf"
 ---
 packages:
