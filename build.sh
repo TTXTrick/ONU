@@ -76,7 +76,7 @@ step "Installing dependencies"
 
 sudo apt update || fail "apt update failed"
 sudo apt install -y live-build debootstrap xorriso syslinux genisoimage squashfs-tools \
-    dpkg-dev curl git xfconf qttools5-dev-tools cmake gzip || fail "Dependency install failed"
+    reprepro dpkg-dev curl git xfconf qttools5-dev-tools cmake || fail "Dependency install failed"
 
 success "Dependencies installed"
 
@@ -85,7 +85,7 @@ success "Dependencies installed"
 ############################################################
 step "Cleaning previous builds"
 
-sudo rm -rf chroot binary auto config packages repo branding tmp || fail "Cleanup failed"
+sudo rm -rf chroot binary auto config packages repo branding tmp build.pid || fail "Cleanup failed"
 mkdir -p config
 
 success "Clean environment ready"
@@ -147,23 +147,22 @@ dpkg-deb --build --root-owner-group "$PACKAGE_DIR" || fail "dpkg-deb failed"
 success "Meta-package built"
 
 ############################################################
-# LOCAL APT REPOSITORY
+# LOCAL APT REPOSITORY (FIXED)
 ############################################################
 step "Building local APT repository"
 
 REPO_DIR="$ROOT_DIR/repo"
-DIST_DIR="$REPO_DIR/dists/$DISTRO/main/binary-amd64"
+DISTRO_DIR="$REPO_DIR/dists/$DISTRO/main/binary-amd64"
 POOL_DIR="$REPO_DIR/pool/main"
 
-# Clean old repo
 rm -rf "$REPO_DIR"
-mkdir -p "$DIST_DIR" "$POOL_DIR"
+mkdir -p "$DISTRO_DIR" "$POOL_DIR"
 
-# Copy .deb into pool
+# Copy the package to pool
 cp packages/$PKG_NAME.deb "$POOL_DIR/"
 
-# Generate Packages.gz for live-build
-dpkg-scanpackages "$POOL_DIR" /dev/null | gzip -9c > "$DIST_DIR/Packages.gz"
+# Generate Packages.gz relative to repo root
+dpkg-scanpackages pool /dev/null | gzip -9c > "$DISTRO_DIR/Packages.gz"
 
 # Add repo entry for live system
 echo "deb [trusted=yes] file:$ROOT_DIR/repo $DISTRO main" \
@@ -210,9 +209,9 @@ cat <<EOF > "$CAL_DIR/modules/users.conf"
 ---
 createUser:
   fullName: "ONU Linux User"
-  userName: "onu"
+  userName: "$LIVE_USER"
   autoLogin: true
-  password: "live"
+  password: "$LIVE_PASS"
 EOF
 
 cat <<EOF > "$CAL_DIR/modules/locale.conf"
@@ -299,9 +298,9 @@ success "ISOLINUX ready"
 step "Configuring EFI GRUB theme"
 
 EFI_DIR="config/includes.binary/boot/grub"
+mkdir -p "$EFI_DIR"
 
-curl -Lf "$WALLPAPER_URL" \
-     -o "$EFI_DIR/onu_splash.png"
+curl -Lf "$WALLPAPER_URL" -o "$EFI_DIR/onu_splash.png"
 
 cat <<EOF > "$EFI_DIR/grub.cfg"
 set timeout=5
