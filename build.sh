@@ -76,7 +76,7 @@ step "Installing dependencies"
 
 sudo apt update || fail "apt update failed"
 sudo apt install -y live-build debootstrap xorriso syslinux genisoimage squashfs-tools \
-    reprepro dpkg-dev curl git xfconf qttools5-dev-tools cmake || fail "Dependency install failed"
+    dpkg-dev curl git xfconf qttools5-dev-tools cmake gzip || fail "Dependency install failed"
 
 success "Dependencies installed"
 
@@ -104,7 +104,7 @@ mkdir -p \
     config/includes.binary/isolinux \
     config/includes.binary/boot/grub \
     branding/calamares \
-    repo/conf
+    repo
 
 success "Directory structure created"
 
@@ -151,24 +151,18 @@ success "Meta-package built"
 ############################################################
 step "Building local APT repository"
 
-mkdir -p repo/conf repo/db repo/dists repo/pool
+mkdir -p repo/main
 
-# Fixed distributions file — no signing
-cat <<EOF > repo/conf/distributions
-Origin: ONU
-Label: ONU
-Suite: bookworm
-Codename: bookworm
-Architectures: amd64
-Components: main
-Description: ONU Local Repo
-EOF
+# Move the .deb into repo
+cp packages/$PKG_NAME.deb repo/main/
 
-# Insert the package
-reprepro -b repo includedeb $DISTRO packages/$PKG_NAME.deb || fail "reprepro failed"
+# Create Packages.gz
+cd repo
+dpkg-scanpackages main /dev/null | gzip -9c > main/Packages.gz
+cd "$ROOT_DIR"
 
-# Add repo entry
-echo "deb [trusted=yes] file:$ROOT_DIR/repo $DISTRO main" \
+# Add repo entry for live system
+echo "deb [trusted=yes] file:$ROOT_DIR/repo ./ " \
   | tee config/includes.chroot/etc/apt/sources.list.d/onu-local.list >/dev/null
 
 success "Local APT repo ready"
