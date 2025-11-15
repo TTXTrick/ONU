@@ -151,18 +151,22 @@ success "Meta-package built"
 ############################################################
 step "Building local APT repository"
 
-mkdir -p repo/main
+REPO_DIR="$ROOT_DIR/repo"
+DIST_DIR="$REPO_DIR/dists/$DISTRO/main/binary-amd64"
+POOL_DIR="$REPO_DIR/pool/main"
 
-# Move the .deb into repo
-cp packages/$PKG_NAME.deb repo/main/
+# Clean old repo
+rm -rf "$REPO_DIR"
+mkdir -p "$DIST_DIR" "$POOL_DIR"
 
-# Create Packages.gz
-cd repo
-dpkg-scanpackages main /dev/null | gzip -9c > main/Packages.gz
-cd "$ROOT_DIR"
+# Copy .deb into pool
+cp packages/$PKG_NAME.deb "$POOL_DIR/"
+
+# Generate Packages.gz for live-build
+dpkg-scanpackages "$POOL_DIR" /dev/null | gzip -9c > "$DIST_DIR/Packages.gz"
 
 # Add repo entry for live system
-echo "deb [trusted=yes] file:$ROOT_DIR/repo ./ " \
+echo "deb [trusted=yes] file:$ROOT_DIR/repo $DISTRO main" \
   | tee config/includes.chroot/etc/apt/sources.list.d/onu-local.list >/dev/null
 
 success "Local APT repo ready"
