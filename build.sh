@@ -124,9 +124,12 @@ success "Meta package built"
 
 # ===========================================
 #  LOCAL REPO
+#  (FIX: ensure repo path exists before cp)
 # ===========================================
 step "Build local repo"
 REPO_SRC="$ROOT_DIR/$IN_TREE_REPO"
+# Ensure directory exists before usage
+mkdir -p "$(dirname "$REPO_SRC")"
 REPO_DST="config/includes.chroot/opt/onu-repo"
 rm -rf "$REPO_SRC"
 mkdir -p "$REPO_SRC/pool/main"
@@ -144,6 +147,8 @@ Architectures: amd64
 Components: main
 EOF
 popd >/dev/null
+# Ensure parent exists
+mkdir -p "$(dirname "$REPO_DST")"
 rm -rf "$REPO_DST"
 mkdir -p config/includes.chroot/opt
 cp -a "$REPO_SRC" "$REPO_DST"
