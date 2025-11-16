@@ -202,4 +202,10 @@ cat > config/includes.chroot/lib/live/config/0031-onu-user <<EOF
 #!/bin/sh
 set -e
 useradd -m -s /bin/bash $LIVE_USER
-echo "$LIVE_USER:$LIVE
+# Create live user with passwordless sudo
+LIVE_USER="onu"
+LIVE_PASS="onu"
+echo "$LIVE_USER:$LIVE_PASS" | chpasswd
+usermod -aG sudo "$LIVE_USER"
+mkdir -p /etc/sudoers.d
+echo "$LIVE_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/99_liveuser
