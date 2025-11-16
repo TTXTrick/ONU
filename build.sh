@@ -78,14 +78,23 @@ success "Clean done"
 #  SETUP CONFIG ROOT
 # =========================================
 step "Prepare config tree"
-mkdir -p config/includes.chroot/etc/lightdm
-echo "[Seat:*]\nautologin-user=live\nautologin-session=xfce" > config/includes.chroot/etc/lightdm/lightdm.conf
 
-# XFCE default session
+# Ensure required directories exist
+mkdir -p config/includes.chroot/etc/lightdm
 mkdir -p config/includes.chroot/etc/skel
+mkdir -p config/includes.chroot/etc/sudoers.d
+
+# LightDM autologin
+echo "[Seat:*]
+autologin-user=live
+autologin-session=xfce" > config/includes.chroot/etc/lightdm/lightdm.conf
+
+# XFCE session
 echo "xfce4-session" > config/includes.chroot/etc/skel/.xsession
 
+# Live user sudo permissions
 echo "live ALL=(ALL) NOPASSWD: ALL" > config/includes.chroot/etc/sudoers.d/live
+
 success "Base config ready"
 
 # =========================================
@@ -203,6 +212,10 @@ success "Welcome app added"
 #  BUILD ISO
 # =========================================
 step "Run live-build"
+
+# Disable manpage pager that appears during lb config
+export MANPAGER=cat
+export PAGER=cat
 lb config --distribution $DISTRO --binary-images iso-hybrid
 lb build
 success "ISO build complete"
