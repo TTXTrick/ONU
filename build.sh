@@ -9,7 +9,7 @@ set -e
 # ==============================
 
 ROOT_DIR="$(pwd)"
-DISTRO="trixie"
+DISTRO="bookworm"
 PKG_NAME="onu-desktop"
 IN_TREE_REPO="config/onu-local-repo"
 
@@ -25,9 +25,39 @@ success() {
 # =========================================
 #  INSTALL REQUIRED TOOLS
 # =========================================
+step "APT cleanup (remove broken repo files + stale locks)"
+
+echo "[INFO] Cleaning stale APT lock files"
+sudo rm -f /var/lib/apt/lists/lock || true
+sudo rm -f /var/cache/apt/archives/lock || true
+sudo rm -f /var/lib/dpkg/lock || true
+sudo rm -f /var/lib/dpkg/lock-frontend || true
+
+echo "[INFO] Fixing dpkg status if needed"
+sudo dpkg --configure -a || true
+
+echo "[INFO] Removing invalid .list files"
+sudo find /etc/apt/sources.list.d -type f ! -name "*.list" -exec rm -f {} \; || true
+
+echo "[INFO] Removing disabled or outdated MariaDB repos"
+sudo rm -f /etc/apt/sources.list.d/mariadb*.list || true
+
+echo "[INFO] Cleaning pkgcache + srcpkgcache"
+sudo rm -f /var/cache/apt/pkgcache.bin || true
+sudo rm -f /var/cache/apt/srcpkgcache.bin || true
+
+echo "[INFO] Running apt-get clean"
+sudo apt-get clean || true
+
+success "APT cleanup completed"
+
 step "Install dependencies"
-apt-get update
-apt-get install -y \
+echo "[INFO] Updating APT (bookworm)…"
+sudo apt-get update || { echo "❌ ERROR: APT update failed"; exit 1; }
+
+echo "[INFO] Installing build dependencies…"
+sudo apt-get install -y \
+
   live-build \
   dpkg-dev \
   xorriso \
@@ -52,6 +82,7 @@ mkdir -p config/includes.chroot/etc/lightdm
 echo "[Seat:*]\nautologin-user=live\nautologin-session=xfce" > config/includes.chroot/etc/lightdm/lightdm.conf
 
 # XFCE default session
+mkdir -p config/includes.chroot/etc/skel
 echo "xfce4-session" > config/includes.chroot/etc/skel/.xsession
 
 echo "live ALL=(ALL) NOPASSWD: ALL" > config/includes.chroot/etc/sudoers.d/live
@@ -127,7 +158,15 @@ popd >/dev/null
 # copy into includes tree
 mkdir -p config/includes.chroot/opt
 rm -rf "$REPO_DST"
-cp -a "$REPO_SRC" "$REPO_DST"
+cp -a "$REPO_SRC" "$REPO_DST" || fail "Failed to copy repo into chroot"
+# Debug: list repo dst
+if [ -d "$REPO_DST" ]; then
+  echo "[DEBUG] Repo deployed at $REPO_DST"
+  ls -l "$REPO_DST" || true
+else
+  echo "❌ ERROR: Repo destination missing after copy: $REPO_DST"
+  fail "Repo copy failed"
+fi
 
 echo "deb [trusted=yes] file:/opt/onu-repo $DISTRO main" > config/includes.chroot/etc/apt/sources.list.d/onu-local.list
 success "Local repo ready"
