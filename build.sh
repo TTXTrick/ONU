@@ -54,7 +54,11 @@ success "Environment OK"
 #  DEPENDENCIES
 # ===========================================
 step "Install dependencies"
-sudo apt update || fail "apt update failed"
+sudo apt update --allow-releaseinfo-change --allow-insecure-repositories || {
+    echo "⚠️ Host apt sources are broken. Temporarily disabling external repos..."
+    sudo sed -i 's/^deb/#deb/g' /etc/apt/sources.list.d/*.list 2>/dev/null || true
+    sudo apt update --allow-releaseinfo-change || fail "apt update failed again"
+}
 sudo apt install -y \
   live-build debootstrap xorriso syslinux genisoimage squashfs-tools \
   reprepro dpkg-dev apt-utils curl git xfconf qttools5-dev-tools cmake \
@@ -201,11 +205,23 @@ step "Live user setup"
 cat > config/includes.chroot/lib/live/config/0031-onu-user <<EOF
 #!/bin/sh
 set -e
+
+# Create live user
 useradd -m -s /bin/bash $LIVE_USER
-# Create live user with passwordless sudo
-LIVE_USER="onu"
-LIVE_PASS="onu"
+
+# Set password
 echo "$LIVE_USER:$LIVE_PASS" | chpasswd
+
+# Add to sudoers
 usermod -aG sudo "$LIVE_USER"
 mkdir -p /etc/sudoers.d
 echo "$LIVE_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/99_liveuser
+chmod 440 /etc/sudoers.d/99_liveuser
+
+# Ensure XFCE session
+echo "[Desktop]" > /home/$LIVE_USER/.dmrc
+echo "Session=xfce" >> /home/$LIVE_USER/.dmrc
+chown $LIVE_USER:$LIVE_USER /home/$LIVE_USER/.dmrc
+EOF
+chmod +x config/includes.chroot/lib/live/config/0031-onu-user
+success "Live user configured"
