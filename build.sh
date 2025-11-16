@@ -4,7 +4,7 @@ set -euo pipefail
 LOGFILE="onu-build.log"
 exec > >(tee "$LOGFILE") 2>&1
 
-echo "========== ONU LINUX BUILD SYSTEM =========="
+echo "========== ONU LINUX BUILD SYSTEM (FIXED) =========="
 
 ############################################################
 # UTILITIES
@@ -106,7 +106,8 @@ mkdir -p \
     config/includes.binary/isolinux \
     config/includes.binary/boot/grub \
     config/includes.binary/boot/grub/themes \
-    branding/calamares
+    branding/calamares \
+    config/package-lists
 
 mkdir -p "$IN_TREE_REPO/dists/$DISTRO/main/binary-amd64"
 mkdir -p "$IN_TREE_REPO/pool/main"
@@ -155,6 +156,26 @@ dpkg-deb --build --root-owner-group "$PACKAGE_DIR" || fail "dpkg-deb failed"
 success "Meta-package built"
 
 ############################################################
+# PACKAGE-LISTS (ensures packages are installed in chroot)
+############################################################
+step "Creating package-lists for live-build"
+
+# Ensure live-build installs our meta-package (and fallback packages) during chroot build
+cat > config/package-lists/onu.list.chroot <<EOF
+# Ensure our meta package is installed in the live image
+$PKG_NAME
+# Fallback explicit packages (helpful if meta-package fails to pull everything)
+xfce4
+lightdm
+network-manager
+firefox-esr
+thunar
+vlc
+EOF
+
+success "Package-lists created"
+
+############################################################
 # LOCAL APT REPOSITORY  (INSIDE CHROOT)
 ############################################################
 step "Building internal APT repository"
@@ -165,14 +186,16 @@ rm -rf "$REPO"
 mkdir -p "$REPO/dists/$DISTRO/main/binary-amd64"
 mkdir -p "$REPO/pool/main"
 
+# copy our built .deb into the in-tree repo (so apt in chroot can use it)
 cp "packages/$PKG_NAME.deb" "$REPO/pool/main/" || fail "Cannot copy meta-package"
 
 pushd "$REPO" >/dev/null
 
+# create Packages index
 dpkg-scanpackages pool > dists/$DISTRO/main/binary-amd64/Packages || fail "dpkg-scanpackages failed"
 gzip -9c dists/$DISTRO/main/binary-amd64/Packages > dists/$DISTRO/main/binary-amd64/Packages.gz
 
-# Try to generate a Release file (optional, improves apt output)
+# Try to create a Release file for nicer apt output
 if command -v apt-ftparchive >/dev/null; then
     apt-ftparchive release dists/"$DISTRO" > dists/"$DISTRO"/Release
 else
@@ -188,8 +211,10 @@ fi
 
 popd >/dev/null
 
-echo "deb [trusted=yes] file:/opt/onu-repo $DISTRO main" \
-    > config/includes.chroot/etc/apt/sources.list.d/onu-local.list
+# Add local repo to chroot apt sources so live-build chroot can install onu-desktop
+cat > config/includes.chroot/etc/apt/sources.list.d/onu-local.list <<EOF
+deb [trusted=yes] file:/opt/onu-repo $DISTRO main
+EOF
 
 success "Local APT repo ready"
 
@@ -254,12 +279,11 @@ displaymanagers:
   - lightdm
 EOF
 
+# NOTE: we no longer remove live-boot/live-config here (they are useful for live sessions)
 cat <<'EOF' > "$CAL_DIR/modules/packages.conf"
 ---
 packages:
-  remove:
-    - live-boot
-    - live-config
+  remove: []
 EOF
 
 cat <<'EOF' > "$CAL_DIR/modules/finished.conf"
@@ -273,7 +297,7 @@ success "Calamares configured"
 ############################################################
 # LIVE USER HOOK
 ############################################################
-step "Creating live user"
+step "Creating live user hook"
 
 cat <<EOF > config/includes.chroot/lib/live/config/0031-onu-user
 #!/bin/sh
@@ -285,6 +309,28 @@ EOF
 chmod +x config/includes.chroot/lib/live/config/0031-onu-user
 
 success "Live user hook installed"
+
+############################################################
+# LIGHTDM AUTOLOGIN (so the live session boots directly to desktop)
+############################################################
+step "Creating LightDM autologin config and enable symlink"
+
+# Create LightDM conf snippet for autologin (will be present in the built image)
+mkdir -p config/includes.chroot/etc/lightdm/lightdm.conf.d
+cat > config/includes.chroot/etc/lightdm/lightdm.conf.d/60-onu.conf <<EOF
+[Seat:*]
+autologin-user=$LIVE_USER
+autologin-user-timeout=0
+autologin-session=xfce
+EOF
+
+# Ensure LightDM is enabled on boot by creating the appropriate systemd wants directory
+# Live-build will copy this into the image exactly, causing systemd to enable the service.
+mkdir -p config/includes.chroot/etc/systemd/system/graphical.target.wants
+# Symlink will point to the unit file installed by the package at /lib/systemd/system/lightdm.service
+ln -sf /lib/systemd/system/lightdm.service config/includes.chroot/etc/systemd/system/graphical.target.wants/lightdm.service || true
+
+success "LightDM autologin and enable configuration added"
 
 ############################################################
 # ISOLINUX (BIOS)
@@ -327,6 +373,28 @@ menuentry "Start ONU Linux Live (EFI)" {
 EOF
 
 success "EFI GRUB configured"
+
+############################################################
+# Optional: Ensure our wallpaper is set as default for skel (new users)
+############################################################
+step "Set wallpaper for default skel"
+
+mkdir -p config/includes.chroot/etc/xdg/xfce4/xfconf/xfce-perchannel-xml
+# Minimal xfce wallpaper config - XFCE will respect user settings if present.
+cat > config/includes.chroot/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-desktop" version="1.0">
+  <property name="backdrop" type="empty">
+    <property name="screen0" type="empty">
+      <property name="monitor0" type="empty">
+        <property name="image-path" type="string" value="/usr/share/backgrounds/ONU/wallpaper.png"/>
+      </property>
+    </property>
+  </property>
+</channel>
+EOF
+
+success "Default wallpaper configured"
 
 ############################################################
 # BUILD ISO
