@@ -165,6 +165,7 @@ EOF
 popd >/dev/null
 
 # copy into includes tree
+mkdir -p config/includes.chroot/etc/apt/sources.list.d || true
 mkdir -p config/includes.chroot/opt
 rm -rf "$REPO_DST"
 cp -a "$REPO_SRC" "$REPO_DST" || fail "Failed to copy repo into chroot"
@@ -177,8 +178,10 @@ else
   fail "Repo copy failed"
 fi
 
+mkdir -p config/includes.chroot/etc/apt/sources.list.d
+mkdir -p config/includes.chroot/etc/apt/sources.list.d
 echo "deb [trusted=yes] file:/opt/onu-repo $DISTRO main" > config/includes.chroot/etc/apt/sources.list.d/onu-local.list
-success "Local repo ready"
+success "Local APT repo configured"
 
 # =========================================
 #  PLYMOUTH THEME + GRUB THEME
