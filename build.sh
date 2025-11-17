@@ -203,9 +203,11 @@ success "Calamares ready"
 
 # =========================================
 #  WELCOME APP
+# (FIXED: ensure usr/bin exists before writing)
 # =========================================
 step "Add welcome app"
 mkdir -p config/includes.chroot/usr/share/onu-welcome
+mkdir -p config/includes.chroot/usr/bin
 echo "#!/bin/bash
 echo 'Welcome to ONU!'" > config/includes.chroot/usr/bin/onu-welcome
 chmod +x config/includes.chroot/usr/bin/onu-welcome
