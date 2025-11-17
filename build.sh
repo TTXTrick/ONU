@@ -126,7 +126,7 @@ echo "[DEBUG] REPO_SRC=$REPO_SRC"
 echo "[DEBUG] REPO_DST=$REPO_DST"
 
 # ensure dpkg-scanpackages exists
-apt-get install -y dpkg-dev
+sudo apt-get install -y dpkg-dev || { echo "❌ ERROR: dpkg-dev install failed"; exit 1; }
 
 # Ensure .deb exists
 if [ ! -f "packages/${PKG_NAME}.deb" ]; then
