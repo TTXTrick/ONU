@@ -98,6 +98,33 @@ echo "live ALL=(ALL) NOPASSWD: ALL" > config/includes.chroot/etc/sudoers.d/live
 success "Base config ready"
 
 # =========================================
+#  CREATE LIVE USER (CRITICAL FIX)
+# =========================================
+step "Create live user inside chroot"
+
+mkdir -p config/includes.chroot/etc/skel
+
+# Create chroot hook to ensure user exists
+mkdir -p config/hooks/live
+cat > config/hooks/live/010-liveuser.chroot << 'EOF'
+#!/bin/bash
+useradd -m -s /bin/bash live || true
+echo "live:live" | chpasswd
+adduser live sudo || true
+EOF
+chmod +x config/hooks/live/010-liveuser.chroot
+
+# LightDM autologin
+mkdir -p config/includes.chroot/etc/lightdm
+cat > config/includes.chroot/etc/lightdm/lightdm.conf <<EOF
+[Seat:*]
+autologin-user=live
+autologin-session=xfce
+EOF
+
+success "Live user creation ready"
+
+# =========================================
 #  INSTALL LIVE PACKAGES
 # =========================================
 step "Create package list"
@@ -184,7 +211,59 @@ echo "deb [trusted=yes] file:/opt/onu-repo $DISTRO main" > config/includes.chroo
 success "Local APT repo configured"
 
 # =========================================
-#  PLYMOUTH THEME + GRUB THEME
+#  PLYMOUTH THEME (REMOVE DEBIAN 12 SPLASH)
+# =========================================
+step "Insert Plymouth + Grub themes"
+
+# Remove Debian default theme
+mkdir -p config/includes.chroot/usr/share/plymouth/themes
+rm -rf config/includes.chroot/usr/share/plymouth/themes/debian || true
+
+# Install custom ONU theme
+mkdir -p config/includes.chroot/usr/share/plymouth/themes/onu
+cat > config/includes.chroot/usr/share/plymouth/themes/onu/onu.plymouth <<EOF
+[Plymouth Theme]
+Name=ONU
+Description=ONU Boot Splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/onu
+ScriptFile=/usr/share/plymouth/themes/onu/onu.script
+EOF
+
+# Minimal script that shows a PNG logo (user replaces logo.png)
+cat > config/includes.chroot/usr/share/plymouth/themes/onu/onu.script <<EOF
+# Show logo centered
+logo = Image("logo.png");
+
+fun draw() {
+    logo.Draw(Screen.Width/2 - logo.Width/2, Screen.Height/2 - logo.Height/2);
+}
+
+Plymouth.SetUpdateFunction(draw);
+EOF
+
+# Placeholder logo
+echo "" > config/includes.chroot/usr/share/plymouth/themes/onu/logo.png
+
+# Select ONU theme
+mkdir -p config/includes.chroot/etc/plymouth
+cat > config/includes.chroot/etc/plymouth/plymouthd.conf <<EOF
+[Daemon]
+Theme=onu
+EOF
+
+# Fix initramfs regeneration inside live-build
+mkdir -p config/hooks/live
+cat > config/hooks/live/020-plymouth.chroot <<'EOF'
+#!/bin/bash
+update-alternatives --set default.plymouth /usr/share/plymouth/themes/onu/onu.plymouth || true
+update-initramfs -u || true
+EOF
+chmod +x config/hooks/live/020-plymouth.chroot
+
+success "Plymouth theme replaced with ONU splash" + GRUB THEME
 # =========================================
 step "Insert Plymouth + Grub themes"
 mkdir -p config/includes.chroot/usr/share/plymouth/themes/onu
