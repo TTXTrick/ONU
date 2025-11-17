@@ -221,6 +221,6 @@ step "Run live-build"
 # Disable manpage pager that appears during lb config
 export MANPAGER=cat
 export PAGER=cat
-lb config --distribution $DISTRO --binary-images iso-hybrid
-lb build
+sudo lb config --distribution $DISTRO --binary-images iso-hybrid
+sudo lb build
 success "ISO build complete"
