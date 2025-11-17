@@ -25,4 +25,4 @@ chmod +x build.sh
 ```
 
 ## After the build
-When the build finishes, you will have ONU-1.0.iso.
+When the build finishes, you will have live-image-amd64.hybrid.iso.
