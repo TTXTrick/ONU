@@ -263,7 +263,57 @@ update-initramfs -u || true
 EOF
 chmod +x config/hooks/live/020-plymouth.chroot
 
-success "Plymouth theme replaced with ONU splash" + GRUB THEME
+# After plymouth theme, install XFCE wallpaper and set default desktop
+# Ensure we have a usable logo and wallpaper (create placeholder if missing)
+if [ ! -f ./onu-logo.png ]; then
+  echo "[INFO] Creating placeholder logo: onu-logo.png"
+  if command -v convert >/dev/null 2>&1; then
+    convert -size 512x512 xc:none -gravity center -pointsize 72 -fill white -annotate 0 'ONU' ./onu-logo.png || true
+  else
+    # fallback: create an empty file to avoid build errors
+    echo "" > ./onu-logo.png
+  fi
+fi
+
+# Copy logo into plymouth theme as logo.png (resize)
+if command -v convert >/dev/null 2>&1; then
+  convert ./onu-logo.png -resize 512x512 config/includes.chroot/usr/share/plymouth/themes/onu/logo.png || cp ./onu-logo.png config/includes.chroot/usr/share/plymouth/themes/onu/logo.png
+else
+  cp ./onu-logo.png config/includes.chroot/usr/share/plymouth/themes/onu/logo.png || true
+fi
+
+# Also ensure XFCE wallpaper exists (use earlier wallpaper if present)
+mkdir -p config/includes.chroot/usr/share/xfce4/backdrops
+if [ -f config/includes.chroot/usr/share/backgrounds/ONU/wallpaper.png ]; then
+  cp config/includes.chroot/usr/share/backgrounds/ONU/wallpaper.png config/includes.chroot/usr/share/xfce4/backdrops/onu.png || true
+else
+  # create a placeholder wallpaper
+  if command -v convert >/dev/null 2>&1; then
+    convert -size 1920x1080 xc:#0a0a0a -gravity center -pointsize 48 -fill white -annotate 0 'ONU Linux' config/includes.chroot/usr/share/xfce4/backdrops/onu.png || true
+  else
+    echo "" > config/includes.chroot/usr/share/xfce4/backdrops/onu.png
+  fi
+fi
+
+# Create XFCE desktop config to set the wallpaper
+mkdir -p config/includes.chroot/etc/xdg/xfce4/xfconf/xfce-perchannel-xml
+cat > config/includes.chroot/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+
+<channel name="xfce4-desktop" version="1.0">
+    <property name="backdrop" type="empty">
+        <property name="screen0" type="empty">
+            <property name="monitor0" type="empty">
+                <property name="image-path" type="string" value="/usr/share/xfce4/backdrops/onu.png"/>
+                <property name="last-image" type="string" value="/usr/share/xfce4/backdrops/onu.png"/>
+                <property name="image-style" type="int" value="5"/>
+            </property>
+        </property>
+    </property>
+</channel>
+XML
+
+success "Plymouth and XFCE wallpaper configured"
 # =========================================
 step "Insert Plymouth + Grub themes"
 mkdir -p config/includes.chroot/usr/share/plymouth/themes/onu
