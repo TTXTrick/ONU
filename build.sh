@@ -287,8 +287,9 @@ fun draw() {
 Plymouth.SetUpdateFunction(draw);
 EOF
 
-# Placeholder logo
-echo "" > config/includes.chroot/usr/share/plymouth/themes/onu/logo.png
+# Copy ONU logo from repo root
+cp "$ROOT_DIR/onu-logo.png" config/includes.chroot/usr/share/plymouth/themes/onu/logo.png || echo "[WARN] onu-logo.png missing — using blank"
+
 
 # Select ONU theme
 mkdir -p config/includes.chroot/etc/plymouth
