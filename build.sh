@@ -211,6 +211,49 @@ echo "deb [trusted=yes] file:/opt/onu-repo $DISTRO main" > config/includes.chroo
 success "Local APT repo configured"
 
 # =========================================
+#  COPY WALLPAPER + SPLASH FROM REPO
+# =========================================
+step "Copy wallpaper + splash"
+
+# Ensure dirs
+mkdir -p config/includes.chroot/usr/share/backgrounds/xfce
+mkdir -p config/includes.chroot/usr/share/plymouth/themes/onu
+
+# Copy repo images
+cp "$ROOT_DIR/background.png" config/includes.chroot/usr/share/backgrounds/xfce/background.png || true
+cp "$ROOT_DIR/splash.png" config/includes.chroot/usr/share/plymouth/themes/onu/logo.png || true
+
+success "Wallpaper + Plymouth splash copied from repo"
+
+# =========================================
+#  XFCE DEFAULT WALLPAPER (AUTO‑SET)
+# =========================================
+step "Set XFCE default wallpaper"
+
+# Copy wallpaper from repo into XFCE backgrounds
+mkdir -p config/includes.chroot/usr/share/backgrounds
+cp "$ROOT_DIR/background.png" config/includes.chroot/usr/share/backgrounds/onu.png
+
+# Set XFCE default wallpaper via xfconf
+mkdir -p config/includes.chroot/etc/xdg/xfce4/xfconf/xfce-perchannel-xml
+cat > config/includes.chroot/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-desktop" version="1.0">
+  <property name="backdrop" type="empty">
+    <property name="screen0" type="empty">
+      <property name="monitor0" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="last-image" type="string" value="/usr/share/backgrounds/onu.png"/>
+        </property>
+      </property>
+    </property>
+  </property>
+</channel>
+EOF
+
+success "XFCE default wallpaper applied"
+
+# =========================================
 #  PLYMOUTH THEME (REMOVE DEBIAN 12 SPLASH)
 # =========================================
 step "Insert Plymouth + Grub themes"
